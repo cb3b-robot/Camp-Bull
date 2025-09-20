@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Camp Bull — 3D</title>
+<title>Camp Bull — 3D (fixed)</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet"/>
 <style>
@@ -55,7 +55,7 @@
 
       <div id="cabins" class="flex flex-col">
         <div class="text-2xl font-bold mb-3">Choose your Cabin</div>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap:3">
           <button class="btn" data-cabin="Bobcat">Bobcat — Agile</button>
           <button class="btn" data-cabin="Eagle">Eagle — Soaring</button>
           <button class="btn" data-cabin="Bull">Bull — Strong</button>
@@ -96,12 +96,12 @@
     </div>
   </div>
 
-  <!-- Three.js -->
+  <!-- Three.js + Game -->
   <script type="module">
     import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
     import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js";
 
-    // Firebase
+    // Firebase (optional/online)
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, doc, setDoc, onSnapshot, collection, getDoc, updateDoc, addDoc, serverTimestamp, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -153,35 +153,37 @@
       cabin:null, x:0, z:0, rot:0,
       bullCoins:20, hunger:100, thirst:100, bathroom:0,
     };
-    const others = {}; // id -> {mesh, label, state}
+    const others = {}; // id -> {mesh, state}
 
     // --- Three.js scene ---
     const scene = new THREE.Scene();
     const renderer = new THREE.WebGLRenderer({ antialias:true });
     renderer.shadowMap.enabled = true;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     root.appendChild(renderer.domElement);
 
-    // Camera & controls (locked to follow)
-    const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 5000);
-    camera.position.set(0, 30, 45);
+    const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 2000);
+    camera.position.set(0, 30, 65);
+    camera.lookAt(0, 0, 0);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enablePan = false; controls.enableZoom = false; controls.enableRotate = false;
 
-    // Resize
     function resize(){
       const w = root.clientWidth, h = root.clientHeight;
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.setSize(w, h, false);
       camera.aspect = w / h; camera.updateProjectionMatrix();
     }
-    addEventListener('resize', resize);
+    window.addEventListener('resize', resize);
+    resize();                         // <<< ensure first paint is valid
+    renderer.render(scene, camera);   // <<< force first frame
 
-    // Lights
-    const hemi = new THREE.HemisphereLight(0xbdd9ff, 0x334455, 0.6);
-    scene.add(hemi);
+    // Lights (brighter + ambient to avoid “black” PB materials)
+    scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+    const hemi = new THREE.HemisphereLight(0xbdd9ff, 0x334455, 0.6); scene.add(hemi);
     const sun = new THREE.DirectionalLight(0xffffff, 1.0);
-    sun.position.set(60, 120, 40);
-    sun.castShadow = true;
+    sun.position.set(60, 120, 40); sun.castShadow = true;
     sun.shadow.mapSize.set(1024,1024);
     sun.shadow.camera.near = 10; sun.shadow.camera.far = 300;
     scene.add(sun);
@@ -189,36 +191,66 @@
     // Ground
     const groundMat = new THREE.MeshStandardMaterial({ color:0x2f3b2f, roughness:1 });
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(220, 220), groundMat);
-    ground.rotation.x = -Math.PI/2; ground.receiveShadow = true;
+    ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; ground.position.y = 0;
     scene.add(ground);
 
-    // Lake (simple glossy plane)
-    const lakeMat = new THREE.MeshPhysicalMaterial({ color:0x2a74b8, metalness:0.1, roughness:0.2, clearcoat:0.8, transmission:0.0 });
-    const lake = new THREE.Mesh(new THREE.CircleGeometry(40, 32), lakeMat);
-    lake.rotation.x = -Math.PI/2; lake.position.set(-50, 0.02, -20);
+    // Lake
+    const lakeMat = new THREE.MeshPhysicalMaterial({ color:0x2a74b8, metalness:0.1, roughness:0.2, clearcoat:0.8 });
+    const lake = new THREE.Mesh(new THREE.CircleGeometry(40, 40), lakeMat);
+    lake.rotation.x = -Math.PI/2; lake.position.set(-40, 0.02, -10);
     scene.add(lake);
 
-    // Cabins (five boxes)
+    // Helper toggles (hold Alt)
+    let helperOn = false;
+    function toggleHelpers(){
+      helperOn = !helperOn;
+      if (helperOn){
+        const grid = new THREE.GridHelper(220, 22, 0x888888, 0x444444); grid.name='__grid__'; scene.add(grid);
+        const axes = new THREE.AxesHelper(25); axes.name='__axes__'; scene.add(axes);
+      } else {
+        const g = scene.getObjectByName('__grid__'); if (g) scene.remove(g);
+        const a = scene.getObjectByName('__axes__'); if (a) scene.remove(a);
+      }
+    }
+    window.addEventListener('keydown', (e)=>{ if (e.altKey) toggleHelpers(); });
+
+    // Reusable box
+    function box(w,h,d,color){
+      const m = new THREE.Mesh(
+        new THREE.BoxGeometry(w,h,d),
+        new THREE.MeshStandardMaterial({color, roughness:0.9, metalness:0})
+      );
+      m.castShadow = true; m.receiveShadow = true;
+      return m;
+    }
+
+    // Cabins — **visible fix**: lift to y = height/2
     const cabinSpots = {
-      Bobcat:  new THREE.Vector3(-80,0,  60),
-      Eagle:   new THREE.Vector3( 80,0,  60),
-      Bull:    new THREE.Vector3(  0,0,  80),
-      Bass:    new THREE.Vector3(-60,0,-70),
-      Cheetah: new THREE.Vector3( 60,0,-70),
+      Bobcat:  new THREE.Vector3(-50, 0, -30),
+      Eagle:   new THREE.Vector3( 50, 0, -30),
+      Bull:    new THREE.Vector3(   0, 0, -50),
+      Bass:    new THREE.Vector3(-35, 0,  25),
+      Cheetah: new THREE.Vector3( 35, 0,  25),
     };
+    const cabinColorsHex = Object.fromEntries(Object.entries(cabinColors).map(([k,v])=>[k,new THREE.Color(v).getHex()]));
     const cabins = {};
     for (const [name,pos] of Object.entries(cabinSpots)){
-      const m = new THREE.Mesh(
-        new THREE.BoxGeometry(22, 10, 16),
-        new THREE.MeshStandardMaterial({ color:new THREE.Color(cabinColors[name]) })
-      );
-      m.position.copy(pos); m.castShadow = true; m.receiveShadow = true;
-      scene.add(m);
-      cabins[name] = m;
-      // label pole
+      const H = 10;
+      const cabin = box(22, H, 16, cabinColorsHex[name]);
+      cabin.position.set(pos.x, H/2, pos.z);   // <<< sit on ground, not sunk
+      scene.add(cabin);
+      cabins[name] = cabin;
+
       const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.6,10,8), new THREE.MeshStandardMaterial({color:0x222}));
-      pole.position.set(pos.x,5,pos.z+12); pole.castShadow = true; scene.add(pole);
+      pole.position.set(pos.x, 5, pos.z + 12); pole.castShadow = true; scene.add(pole);
     }
+
+    // Props
+    const mealTable = box(14,1,8,0xa13333); mealTable.position.set(-10,0.6,45); scene.add(mealTable);
+    const waterSpout = box(3,6,3,0x3da5ff); waterSpout.position.set(-15,3,10); scene.add(waterSpout);
+    const library = box(26,12,18,0x7a49ae); library.position.set(55,6,  5); scene.add(library);
+    const shop = box(10,8,10,0x2b5f7a); shop.position.set(5,4,-5); scene.add(shop);
+    const pit = box(30,2,30,0x202a32); pit.position.set(30,1,55); scene.add(pit);
 
     // Trees
     function addTree(x,z){
@@ -227,34 +259,11 @@
       const leaves = new THREE.Mesh(new THREE.ConeGeometry(4,10,7), new THREE.MeshStandardMaterial({color:0x274f27, roughness:1}));
       leaves.position.set(x,11,z); leaves.castShadow=true; scene.add(leaves);
     }
-    for (let i=0;i<28;i++){
-      addTree((Math.random()*180-90), (Math.random()*180-90));
-    }
+    for (let i=0;i<24;i++){ addTree((Math.random()*180-90), (Math.random()*160-80)); }
 
-    // Meal table & water spout & library & shop kiosk
-    function box(w,h,d,color){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshStandardMaterial({color}));
-      m.castShadow=true; m.receiveShadow=true; return m; }
-    const mealTable = box(14,1,8,0xa13333); mealTable.position.set(-10,0.6,70); scene.add(mealTable);
-    const waterSpout = box(3,6,3,0x3da5ff); waterSpout.position.set(-15,3,30); scene.add(waterSpout);
-    const library = box(26,12,18,0x7a49ae); library.position.set(85,6,-10); scene.add(library);
-    const shop = box(10,8,10,0x2b5f7a); shop.position.set(5,4,-5); scene.add(shop);
-
-    // Pit
-    const pit = box(30,2,30,0x202a32); pit.position.set(30,1,90); scene.add(pit);
-
-    // Player (capsule-ish)
+    // Player
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(2, 3, 8, 12), new THREE.MeshStandardMaterial({ color:0xf39c12 }));
-    body.castShadow = true; scene.add(body);
-    player.x = 0; player.z = 0;
-
-    // Others cache
-    function ensureOther(id, color=0x888888){
-      if (others[id]) return others[id];
-      const m = new THREE.Mesh(new THREE.CapsuleGeometry(2, 3, 8, 12), new THREE.MeshStandardMaterial({ color }));
-      m.castShadow = true; scene.add(m);
-      others[id] = { mesh:m, state:{} };
-      return others[id];
-    }
+    body.castShadow = true; body.position.set(0,3.5,0); scene.add(body);
 
     // Camera follow
     function followCamera(){
@@ -269,52 +278,36 @@
     const keys = {w:0,a:0,s:0,d:0};
     addEventListener('keydown',e=>{ if(e.key==='w')keys.w=1;if(e.key==='a')keys.a=1;if(e.key==='s')keys.s=1;if(e.key==='d')keys.d=1;if(e.key==='E'||e.key==='e')tryShop();});
     addEventListener('keyup',e=>{ if(e.key==='w')keys.w=0;if(e.key==='a')keys.a=0;if(e.key==='s')keys.s=0;if(e.key==='d')keys.d=0;});
-
     let velX=0, velZ=0;
     function stepMove(dt){
       const acc = 40, drag = 12, max = 18;
       const fwd = (keys.w - keys.s), str = (keys.d - keys.a);
-      // rotate intent into world
       const sin = Math.sin(player.rot), cos = Math.cos(player.rot);
       const ix = (str*cos + fwd*sin), iz = (str*-sin + fwd*cos);
       velX += ix * acc * dt; velZ += iz * acc * dt;
-      // clamp
       const spd = Math.hypot(velX, velZ);
       if (spd > max){ velX *= max/spd; velZ *= max/spd; }
-      // drag
       velX = THREE.MathUtils.damp(velX, 0, drag, dt);
       velZ = THREE.MathUtils.damp(velZ, 0, drag, dt);
       player.x += velX * dt; player.z += velZ * dt;
-      // keep on ground and in bounds
       player.x = Math.max(-105, Math.min(105, player.x));
       player.z = Math.max(-105, Math.min(105, player.z));
-      // face velocity if moving
-      if (Math.hypot(velX,velZ) > 0.3){
-        player.rot = Math.atan2(velX, velZ);
-      }
+      if (Math.hypot(velX,velZ) > 0.3){ player.rot = Math.atan2(velX, velZ); }
       body.position.set(player.x, 3.5, player.z);
       body.rotation.y = player.rot;
     }
 
-    // Day/Night cycle (600s loop)
-    const dayLen = 600; // seconds
+    // Day/Night
+    const dayLen = 600;
     function applyDayNight(t){
-      // t: 0..1
-      const k = Math.sin(t*Math.PI); // high at midday
+      const k = Math.sin(t*Math.PI);
       sun.intensity = 0.3 + 0.9 * k;
       hemi.intensity = 0.4 + 0.4 * k;
       scene.background = new THREE.Color().setHSL(0.6, 0.6, 0.15 + 0.35*k);
     }
 
-    // Ambient audio (optional)
-    const audio = new Audio();
-    audio.loop = true;
-    // small synthesized “water-ish” fallback data uri (very quiet), you can replace with your own mp3/ogg URLs
-    audio.src = "data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAA"; // (placeholder; silent)
-    document.body.addEventListener('click', ()=>{ audio.play().catch(()=>{}); }, { once:true });
-
-    // Gameplay needs & interactions
-    const AABB = (x,z,w,d,obj)=> (player.x>obj.x-w && player.x<obj.x+w && player.z>obj.z-d && player.z<obj.z+d);
+    // Gameplay
+    const AABB = (obj, w, d)=> (player.x>obj.x-w && player.x<obj.x+w && player.z>obj.z-d && player.z<obj.z+d);
     const objPos = {
       lake: {x: lake.position.x, z: lake.position.z, w: 42, d: 42},
       spout:{x: waterSpout.position.x, z: waterSpout.position.z, w: 4, d: 4},
@@ -324,35 +317,23 @@
       pit: {x: pit.position.x, z: pit.position.z, w: 14, d: 14},
     };
 
-    // Events system (global modifiers)
     const events = [
       { key:'heat', name:'Heat Wave', desc:'Thirst drains faster', start:60, end:160, thirstMul:1.8 },
       { key:'rain', name:'Rain', desc:'Thirst drains slower, hunger slightly faster', start:280, end:360, thirstMul:0.6, hungerMul:1.2 },
     ];
-    function activeEvent(tSec){
-      return events.find(e => tSec>=e.start && tSec<=e.end) || null;
-    }
+    function activeEvent(tSec){ return events.find(e => tSec>=e.start && tSec<=e.end) || null; }
 
-    // Quests
     let quest = { key:'fetch_water', text:'Fetch water at the spout (stand next to it for 2s).', progress:0, done:false };
-
-    // Economy / Shop
     let nearShop = false;
     function tryShop(){
       if (!nearShop) return;
-      // simple menu: prefer water if thirst<80, otherwise snack
       if (player.thirst < 80 && player.bullCoins >= 3){
-        player.thirst = Math.min(100, player.thirst + 30); player.bullCoins -= 3;
-        addCabinScore(player.cabin, 1, 'Hydration purchase');
+        player.thirst = Math.min(100, player.thirst + 30); player.bullCoins -= 3; addCabinScore(player.cabin, 1, 'Hydration purchase');
       } else if (player.bullCoins >= 5){
-        player.hunger = Math.min(100, player.hunger + 30); player.bullCoins -= 5;
-        addCabinScore(player.cabin, 1, 'Snack purchase');
+        player.hunger = Math.min(100, player.hunger + 30); player.bullCoins -= 5; addCabinScore(player.cabin, 1, 'Snack purchase');
       }
-      coinsEl.textContent = player.bullCoins|0;
-      queueStateSend();
+      coinsEl.textContent = player.bullCoins|0; queueStateSend();
     }
-
-    // HUD helpers
     function updateHUD(){
       hungerEl.style.width = Math.max(0, player.hunger) + '%';
       thirstEl.style.width = Math.max(0, player.thirst) + '%';
@@ -360,39 +341,24 @@
       coinsEl.textContent = player.bullCoins|0;
     }
 
-    // Cabin scores HUD
     let cabinScores = { Bobcat:0, Eagle:0, Bull:0, Bass:0, Cheetah:0 };
     function renderScores(){
-      scoreList.innerHTML = Object.entries(cabinScores)
-        .map(([k,v])=>`<div><b style="color:${cabinColors[k]}">${k}</b>: ${v|0}</div>`).join('');
+      scoreList.innerHTML = Object.entries(cabinScores).map(([k,v])=>`<div><b style="color:${cabinColors[k]}">${k}</b>: ${v|0}</div>`).join('');
     }
-    function addCabinScore(cabin, amount, reason=''){
-      if (!cabin) return;
-      cabinScores[cabin] = (cabinScores[cabin]||0) + amount;
-      renderScores();
-      if (ONLINE) updateDoc(doc(db, cabinsDocPath), { [cabin]: cabinScores[cabin] }).catch(()=>{});
-    }
+    function addCabinScore(cabin, amount){ if (!cabin) return; cabinScores[cabin] = (cabinScores[cabin]||0) + amount; renderScores(); if (ONLINE) updateDoc(doc(db, cabinsDocPath), { [cabin]: cabinScores[cabin] }).catch(()=>{}); }
 
     // Networking (throttled)
     let lastSend=0, sendEvery=140; let lastSnapshot = null;
     function queueStateSend(){
-      const now = performance.now();
-      if (now - lastSend < sendEvery) return;
-      lastSend = now;
+      const now = performance.now(); if (now - lastSend < sendEvery) return; lastSend = now;
       if (!ONLINE || !userId || !player.cabin) return;
       const ref = doc(db, playersCol, userId);
-      const payload = {
-        id:userId, x:player.x, z:player.z, rot:player.rot,
-        hunger:player.hunger, thirst:player.thirst, bathroom:player.bathroom,
-        bullCoins:player.bullCoins, cabin:player.cabin, username:player.username,
-        ts: Date.now()
-      };
-      if (JSON.stringify(payload) === lastSnapshot) return;
-      lastSnapshot = JSON.stringify(payload);
+      const payload = { id:userId, x:player.x, z:player.z, rot:player.rot, hunger:player.hunger, thirst:player.thirst, bathroom:player.bathroom, bullCoins:player.bullCoins, cabin:player.cabin, username:player.username, ts: Date.now() };
+      const str = JSON.stringify(payload); if (str === lastSnapshot) return; lastSnapshot = str;
       updateDoc(ref, payload).catch(()=>{ setDoc(ref, payload, { merge:true }).catch(()=>{}); });
     }
 
-    // Chat (throttled)
+    // Chat
     let lastChatAt = 0;
     chatInput.addEventListener('keydown', async (e)=>{
       if (e.key !== 'Enter') return;
@@ -402,132 +368,88 @@
       if (ONLINE){
         await addDoc(collection(db, chatCol), { uid:userId, name:player.username, cabin:player.cabin||'—', text, ts:serverTimestamp() }).catch(()=>{});
       } else {
-        appendChat({name:player.username, cabin:player.cabin||'—', text});
+        const line = document.createElement('div'); line.innerHTML = `<b>${player.username}</b> <span class="opacity-50">[${player.cabin||'—'}]</span>: ${text}`;
+        chatLog.appendChild(line); chatLog.scrollTop = chatLog.scrollHeight;
       }
     });
-    function appendChat(m){
-      const line = document.createElement('div');
-      line.innerHTML = `<b>${m.name}</b> <span class="opacity-50">[${m.cabin}]</span>: ${m.text}`;
-      chatLog.appendChild(line); chatLog.scrollTop = chatLog.scrollHeight;
-    }
 
     // Auth / Init
     async function boot(){
-      resize();
       document.getElementById('screens').style.display = 'block';
       show('loading');
 
       if (ONLINE){
         try{
-          app = initializeApp(firebaseConfig);
+          const app = initializeApp(firebaseConfig);
           auth = getAuth(); db = getFirestore();
           onAuthStateChanged(auth, async (u)=>{
             if (u){ userId = u.uid; player.id = userId; userIdEl.textContent = `User: ${userId.slice(0,6)}…`; await onlineInit(); }
             else {
-              if (initialAuthToken){
-                try{ await signInWithCustomToken(auth, initialAuthToken); }catch{ await signInAnonymously(auth); }
-              } else await signInAnonymously(auth);
+              if (initialAuthToken){ try{ await signInWithCustomToken(auth, initialAuthToken); }catch{ await signInAnonymously(auth); } }
+              else await signInAnonymously(auth);
             }
           });
-        }catch{
-          userIdEl.textContent = 'Offline mode'; offlineInit();
-        }
-      } else {
-        userIdEl.textContent = 'Offline mode'; offlineInit();
-      }
+        }catch{ userIdEl.textContent = 'Offline mode'; offlineInit(); }
+      } else { userIdEl.textContent = 'Offline mode'; offlineInit(); }
     }
-
     async function onlineInit(){
-      // Cabin scores live
-      onSnapshot(doc(db, cabinsDocPath), (snap)=>{
-        if (snap.exists()){ cabinScores = { ...cabinScores, ...snap.data() }; renderScores(); }
-      });
-
-      // Players live
+      onSnapshot(doc(db, cabinsDocPath), (snap)=>{ if (snap.exists()){ cabinScores = { ...cabinScores, ...snap.data() }; renderScores(); }});
       onSnapshot(collection(db, playersCol), (snap)=>{
         snap.docChanges().forEach(ch=>{
           const d = ch.doc.data(); if (!d || d.id === userId) return;
-          const other = ensureOther(d.id, new THREE.Color(cabinColors[d.cabin]||'#888').getHex());
-          other.state = d;
-          other.mesh.position.set(d.x||0, 3.5, d.z||0);
-          other.mesh.material.color.set(cabinColors[d.cabin]||'#888');
+          let other = others[d.id]; if (!other){ other = others[d.id] = { mesh:new THREE.Mesh(new THREE.CapsuleGeometry(2,3,8,12), new THREE.MeshStandardMaterial({ color: cabinColorsHex[d.cabin]||0x888888 })), state:{} }; other.mesh.castShadow=true; scene.add(other.mesh); }
+          other.state = d; other.mesh.position.set(d.x||0, 3.5, d.z||0); other.mesh.material.color.set(cabinColors[d.cabin]||'#888');
         });
       });
-
-      // Chat live
       onSnapshot(query(collection(db, chatCol), orderBy('ts','desc'), limit(20)), (snap)=>{
-        chatLog.innerHTML='';
-        const rows = [];
-        snap.forEach(doc=>{ const m=doc.data(); rows.push(m); });
-        rows.reverse().forEach(m=> appendChat(m));
+        chatLog.innerHTML=''; const rows=[]; snap.forEach(doc=>rows.push(doc.data())); rows.reverse().forEach(m=>{ const line=document.createElement('div'); line.innerHTML=`<b>${m.name}</b> <span class="opacity-50">[${m.cabin}]</span>: ${m.text}`; chatLog.appendChild(line);}); chatLog.scrollTop = chatLog.scrollHeight;
       });
-
-      // If first time, seed doc
-      const meRef = doc(db, playersCol, userId);
-      const meSnap = await getDoc(meRef);
-      if (!meSnap.exists()){ await setDoc(meRef, { ...player }, { merge:true }); }
-
+      const meRef = doc(db, playersCol, userId); const meSnap = await getDoc(meRef); if (!meSnap.exists()){ await setDoc(meRef, { ...player }, { merge:true }); }
       show('cutscene');
     }
+    function offlineInit(){ renderScores(); show('cutscene'); }
 
-    function offlineInit(){
-      renderScores();
-      show('cutscene');
-    }
-
-    // Cabin selection flow
+    // Cabin selection
     document.getElementById('to-cabins').addEventListener('click', ()=> show('cabins'));
     document.querySelectorAll('#cabins .btn').forEach(btn=>{
       btn.addEventListener('click', async ()=>{
         player.cabin = btn.dataset.cabin;
         body.material.color.set(cabinColors[player.cabin]);
         document.getElementById('screens').style.display='none';
-        addCabinScore(player.cabin, 1, 'Arrival');
-        // center
-        player.x = 0; player.z = 0;
+        addCabinScore(player.cabin, 1);
+        player.x = 0; player.z = 0; body.position.set(0,3.5,0);
         if (ONLINE){ await setDoc(doc(db, playersCol, userId), { ...player }, { merge:true }).catch(()=>{}); }
       });
     });
 
-    // Main loop
+    // Loop
     let last = performance.now(); let tDay = 0; let questHold = 0;
     function frame(now){
       const dt = Math.min(0.05, (now-last)/1000); last=now;
-      tDay = (tDay + dt) % (dayLen);
-      applyDayNight(tDay/dayLen);
+      tDay = (tDay + dt) % 600;
+      applyDayNight(tDay/600);
 
       stepMove(dt);
       followCamera();
 
-      // Needs baseline decay
+      // Needs
       let hungerMul = 0.18, thirstMul = 0.28, bathInc = 0.12;
       const ev = activeEvent(tDay);
-      if (ev){
-        eventBanner.style.display='block';
-        eventBanner.textContent = `Event: ${ev.name} — ${ev.desc}`;
-        hungerMul *= ev.hungerMul || 1.0;
-        thirstMul *= ev.thirstMul || 1.0;
-      } else eventBanner.style.display='none';
-
+      if (ev){ eventBanner.style.display='block'; eventBanner.textContent = `Event: ${ev.name} — ${ev.desc}`; hungerMul *= ev.hungerMul || 1.0; thirstMul *= ev.thirstMul || 1.0; }
+      else eventBanner.style.display='none';
       player.hunger = Math.max(0, player.hunger - hungerMul*100*dt/60);
       player.thirst = Math.max(0, player.thirst - thirstMul*100*dt/60);
       player.bathroom = Math.min(100, player.bathroom + bathInc*100*dt/60);
 
       // Interactions
-      // Lake -> bathroom rises quicker
-      if (AABB(0,0, 0,0, objPos.lake)){ player.bathroom = Math.min(100, player.bathroom + 20*dt); }
-      // Spout -> thirst refill
-      if (AABB(0,0,0,0, objPos.spout)){ player.thirst = Math.min(100, player.thirst + 60*dt); questHold += dt; if (quest.key==='fetch_water' && !quest.done && questHold>=2){ quest.done=true; addCabinScore(player.cabin, 5, 'Quest: Water'); questText.textContent='Quest complete!'; } }
+      if (AABB(objPos.lake, 42, 42)) { player.bathroom = Math.min(100, player.bathroom + 20*dt); }
+      if (AABB(objPos.spout, 4, 4))   { player.thirst = Math.min(100, player.thirst + 60*dt); questHold += dt; if (quest.key==='fetch_water' && !quest.done && questHold>=2){ quest.done=true; addCabinScore(player.cabin, 5); questText.textContent='Quest complete!'; } }
       else questHold = 0;
-      // Library -> bathroom relief
-      if (AABB(0,0,0,0, objPos.library)){ player.bathroom = Math.max(0, player.bathroom - 120*dt); }
-      // Meal -> refill hunger
-      if (AABB(0,0,0,0, objPos.meal)){ player.hunger = Math.min(100, player.hunger + 100*dt); }
-      // Pit consequence if starving and long time since eat (simulated with hunger<35 & thirst<35)
-      if (player.hunger<35 && player.thirst<35 && AABB(0,0,0,0, objPos.pit)){ player.bullCoins = Math.max(0, player.bullCoins - 10); }
+      if (AABB(objPos.library, 14, 12)){ player.bathroom = Math.max(0, player.bathroom - 120*dt); }
+      if (AABB(objPos.meal, 10, 7))    { player.hunger = Math.min(100, player.hunger + 100*dt); }
+      if (player.hunger<35 && player.thirst<35 && AABB(objPos.pit, 14, 14)){ player.bullCoins = Math.max(0, player.bullCoins - 10); }
 
-      // Shop proximity
-      const near = AABB(0,0,0,0, objPos.shop);
+      const near = AABB(objPos.shop, 8, 8);
       if (near && !nearShop){ shopTip.classList.remove('hidden'); }
       if (!near && nearShop){ shopTip.classList.add('hidden'); }
       nearShop = near;
@@ -539,7 +461,7 @@
       requestAnimationFrame(frame);
     }
 
-    // Initial quest
+    // Initial quest text
     questText.textContent = 'Fetch water at the spout (stand next to it for 2s).';
 
     // Start
