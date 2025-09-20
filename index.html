@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Camp Bull</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body{
+      font-family: 'Inter', sans-serif;
+      background-color:#1a202c;color:#e2e8f0;
+      display:flex;justify-content:center;align-items:center;min-height:100vh;
+    }
+    #loading-screen,#cutscene-bus,#cutscene-director,#cabin-selection,#game-container{
+      display:none;flex-direction:column;align-items:center;justify-content:center;
+      width:100%;max-width:800px;min-height:600px;background-color:#2d3748;border-radius:12px;
+      box-shadow:0 4px 6px rgba(0,0,0,.1);padding:24px;
+    }
+    #game-canvas{
+      width:100%;height:100%;background-color:#3b4554;border-radius:8px;outline:none;
+    }
+    .cutscene-text{font-size:1.5rem;text-align:center;margin-top:16px;}
+    .animated-text{animation:fadeIn 2s ease-in-out forwards;}
+    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+    .fade-in{opacity:0;animation:fadeIn 1s forwards;}
+    .max-marquez{
+      width:200px;height:50px;
+      background-image:url('https://placehold.co/200x400/0891b2/ffffff?text=Max+Marquez');
+      background-size:cover;background-position:center bottom;animation:panUp 3s forwards;border-radius:10px;
+    }
+    @keyframes panUp{from{height:50px}to{height:400px}}
+    .dialogue-box{background-color:rgba(0,0,0,.5);padding:1rem;border-radius:8px;margin-top:1rem;}
+    .cabin-button{transition:transform .2s,box-shadow .2s;}
+    .cabin-button:hover{transform:translateY(-5px);box-shadow:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -2px rgba(0,0,0,.05);}
+    .currency-box{
+      position:absolute;bottom:24px;left:24px;background-color:#2d3748;padding:8px 16px;border-radius:8px;
+      display:flex;align-items:center;gap:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);
+    }
+    .status-bar{
+      position:absolute;top:24px;left:24px;background-color:#2d3748;padding:8px 16px;border-radius:8px;
+      box-shadow:0 4px 6px rgba(0,0,0,.1);display:flex;flex-direction:column;gap:8px;
+    }
+    .bar-container{width:150px;height:20px;background-color:#555;border-radius:10px;overflow:hidden;border:1px solid #777;}
+    .bar-fill{height:100%;transition:width .3s ease-in-out;}
+  </style>
+</head>
+<body class="bg-gray-900 text-white">
+
+  <!-- Screens -->
+  <div id="loading-screen" class="flex">
+    <div class="text-xl animate-pulse">Loading Camp Bull…</div>
+  </div>
+
+  <div id="cutscene-bus" class="flex">
+    <img src="https://placehold.co/600x300/60a5fa/ffffff?text=Bus+View" alt="Bus Window View" class="rounded-xl shadow-lg mb-6" />
+    <p class="cutscene-text animated-text">The bus rumbles along a long, winding dirt road. Through the window, you see tall pine trees and the shimmer of a lake in the distance. This is it. Camp Bull.</p>
+    <button id="skip-bus-cutscene" class="mt-8 px-6 py-3 bg-blue-500 rounded-lg text-white font-bold hover:bg-blue-600 transition-colors">Continue</button>
+  </div>
+
+  <div id="cutscene-director" class="flex">
+    <div class="max-marquez"></div>
+    <div class="dialogue-box text-center fade-in">
+      <h2 class="text-2xl font-bold">Max Marquez</h2>
+      <p>Welcome to Camp Bull, future campers! I'm Max Marquez, your camp director. We have five amazing cabins you can join, each with its own legacy. Choose wisely!</p>
+    </div>
+    <button id="skip-director-cutscene" class="mt-8 px-6 py-3 bg-blue-500 rounded-lg text-white font-bold hover:bg-blue-600 transition-colors">Choose Your Cabin</button>
+  </div>
+
+  <div id="cabin-selection" class="flex">
+    <h1 class="text-3xl font-bold mb-8 text-center">Choose Your Cabin</h1>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <button class="cabin-button p-6 rounded-xl bg-gray-700 text-center" data-cabin="Bobcat">
+        <h2 class="text-xl font-semibold">Bobcat</h2><p>Agile and stealthy.</p>
+      </button>
+      <button class="cabin-button p-6 rounded-xl bg-gray-700 text-center" data-cabin="Eagle">
+        <h2 class="text-xl font-semibold">Eagle</h2><p>Soaring to new heights.</p>
+      </button>
+      <button class="cabin-button p-6 rounded-xl bg-gray-700 text-center" data-cabin="Bull">
+        <h2 class="text-xl font-semibold">Bull</h2><p>Strong and resilient.</p>
+      </button>
+      <button class="cabin-button p-6 rounded-xl bg-gray-700 text-center" data-cabin="Bass">
+        <h2 class="text-xl font-semibold">Bass</h2><p>Deep and wise.</p>
+      </button>
+      <button class="cabin-button p-6 rounded-xl bg-gray-700 text-center" data-cabin="Cheetah">
+        <h2 class="text-xl font-semibold">Cheetah</h2><p>Fast and focused.</p>
+      </button>
+    </div>
+  </div>
+
+  <div id="game-container" class="flex relative">
+    <canvas id="game-canvas" tabindex="0" aria-label="Camp Bull canvas"></canvas>
+
+    <div class="currency-box">
+      <span class="text-yellow-300 text-lg">💰</span>
+      <span id="bull-coins" class="text-lg font-bold">0</span>
+      <span class="text-white">Bull Coins</span>
+      <div id="user-info" class="text-xs absolute -right-2 -bottom-6 p-2 opacity-50"></div>
+    </div>
+
+    <div class="status-bar">
+      <div class="flex items-center gap-2">
+        <span class="text-xl">🍔</span><span class="w-24">Hunger</span>
+        <div class="bar-container"><div id="hunger-bar" class="bar-fill bg-red-500" style="width:100%;"></div></div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-xl">💧</span><span class="w-24">Thirst</span>
+        <div class="bar-container"><div id="thirst-bar" class="bar-fill bg-blue-500" style="width:100%;"></div></div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-xl">🚽</span><span class="w-24">Bathroom</span>
+        <div class="bar-container"><div id="bathroom-bar" class="bar-fill bg-green-500" style="width:0%;"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase + Game -->
+  <script type="module">
+    // Firebase SDKs
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, onSnapshot, collection, addDoc, getDoc, updateDoc, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // --- Config & Globals ---
+    const firebaseConfig = JSON.parse(typeof window.__firebase_config !== 'undefined' ? window.__firebase_config : '{}');
+    const appId = typeof window.__app_id !== 'undefined' ? window.__app_id : 'default-app-id';
+    const initialAuthToken = typeof window.__initial_auth_token !== 'undefined' ? window.__initial_auth_token : null;
+    const ONLINE = Boolean(firebaseConfig && firebaseConfig.apiKey);
+
+    let app, db, auth, userId;
+    const playersCollectionPath = `artifacts/${appId}/public/data/players`;
+
+    // --- DOM & Canvas ---
+    const screens = {
+      loading: document.getElementById('loading-screen'),
+      bus: document.getElementById('cutscene-bus'),
+      director: document.getElementById('cutscene-director'),
+      cabins: document.getElementById('cabin-selection'),
+      game: document.getElementById('game-container'),
+    };
+    const gameCanvas = document.getElementById('game-canvas');
+    const ctx = gameCanvas.getContext('2d');
+    const bullCoinsDisplay = document.getElementById('bull-coins');
+    const hungerBar = document.getElementById('hunger-bar');
+    const thirstBar = document.getElementById('thirst-bar');
+    const bathroomBar = document.getElementById('bathroom-bar');
+    const userInfoDisplay = document.getElementById('user-info');
+
+    // --- State ---
+    let gameState = 'loading'; // loading, bus_cutscene, director_cutscene, cabin_select, playing
+    const cabinColors = { Bobcat:'#ff7f00', Eagle:'#3498db', Bull:'#c0392b', Bass:'#27ae60', Cheetah:'#f1c40f' };
+    const movement = { up:false, down:false, left:false, right:false };
+
+    const mapObjects = {
+      waterSpout:{ x:50,  y:50,  width:20,  height:20,  color:'#3498db' },
+      library:   { x:700, y:500, width:100, height:80,  color:'#8e44ad' },
+      lake:      { x:150, y:300, width:250, height:150, color:'#2980b9' },
+      mealTable: { x:50,  y:500, width:100, height:80,  color:'#c0392b' },
+      pit:       { x:300, y:100, width:150, height:150, color:'#2c3e50' }
+    };
+
+    let player = {
+      id:null, x:0, y:0, bullCoins:0, cabin:null,
+      username:`Camper_${Math.floor(Math.random()*10000)}`,
+      hunger:100, thirst:100, bathroom:0
+    };
+    const otherPlayers = {};
+
+    // --- Utilities ---
+    function showOnly(name){
+      Object.values(screens).forEach(el=>el.style.display='none');
+      if (name==='loading') screens.loading.style.display='flex';
+      if (name==='bus_cutscene') screens.bus.style.display='flex';
+      if (name==='director_cutscene') screens.director.style.display='flex';
+      if (name==='cabin_select') screens.cabins.style.display='flex';
+      if (name==='playing') screens.game.style.display='flex';
+      gameState = name==='bus_cutscene'?'bus_cutscene':
+                  name==='director_cutscene'?'director_cutscene':
+                  name==='cabin_select'?'cabin_select':
+                  name==='playing'?'playing':'loading';
+    }
+
+    function resizeCanvas(){
+      const dpr = window.devicePixelRatio || 1;
+      const rect = screens.game.getBoundingClientRect();
+      // Set backing store size for crisp pixels
+      gameCanvas.width = Math.max(1, Math.floor(rect.width * dpr));
+      gameCanvas.height = Math.max(1, Math.floor(rect.height * dpr));
+      // Keep CSS size for layout
+      gameCanvas.style.width = rect.width + 'px';
+      gameCanvas.style.height = rect.height + 'px';
+      // Scale drawing to CSS pixels
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function checkCollision(a,b){
+      return a.x < b.x + b.width &&
+             a.x + a.width > b.x &&
+             a.y < b.y + b.height &&
+             a.y + a.height > b.y;
+    }
+
+    // --- Firebase: guarded init & throttled writes ---
+    let lastSentAt = 0;
+    let sendMinMs = 150; // ~6-7 writes/sec max
+    let prevSent = null;
+
+    function stateDiff(a,b){
+      if (!a || !b) return true;
+      return a.x!==b.x || a.y!==b.y ||
+             a.bullCoins!==b.bullCoins ||
+             a.hunger!==b.hunger ||
+             a.thirst!==b.thirst ||
+             a.bathroom!==b.bathroom ||
+             a.cabin!==b.cabin;
+    }
+
+    async function safeUpdatePlayer(statePartial){
+      if (!ONLINE || !userId) return;
+      const now = performance.now();
+      const merged = { ...player, ...statePartial };
+      if (!stateDiff(merged, prevSent) && (now - lastSentAt) < 1000) return; // avoid dup spam
+      if ((now - lastSentAt) < sendMinMs) return; // throttle
+      try{
+        await updateDoc(doc(db, playersCollectionPath, userId), statePartial);
+        prevSent = { ...player }; // snapshot after send
+        lastSentAt = now;
+      }catch(err){
+        // Swallow rate-limit errors locally; keep game running
+        // console.warn('Update skipped:', err?.message);
+      }
+    }
+
+    async function loadPlayerState(){
+      if (!ONLINE) return;
+      const ref = doc(db, playersCollectionPath, userId);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        player = { ...player, ...snap.data() };
+      } else {
+        await setDoc(ref, player);
+      }
+      onSnapshot(collection(db, playersCollectionPath), (snapshot)=>{
+        snapshot.docChanges().forEach(change=>{
+          const data = change.doc.data();
+          if (!data || !data.id) return;
+          if (data.id === userId){
+            // Keep local authoratitive; but merge server changes like cabin if set elsewhere
+            player = { ...player, ...data };
+          } else {
+            otherPlayers[data.id] = data;
+          }
+        });
+      });
+    }
+
+    // --- Drawing & Game Loop ---
+    function drawGame(){
+      ctx.clearRect(0,0,gameCanvas.width,gameCanvas.height);
+
+      // Draw map
+      ctx.fillStyle = mapObjects.lake.color;
+      ctx.fillRect(mapObjects.lake.x, mapObjects.lake.y, mapObjects.lake.width, mapObjects.lake.height);
+      ctx.fillStyle = mapObjects.library.color;
+      ctx.fillRect(mapObjects.library.x, mapObjects.library.y, mapObjects.library.width, mapObjects.library.height);
+      ctx.fillStyle = mapObjects.waterSpout.color;
+      ctx.fillRect(mapObjects.waterSpout.x, mapObjects.waterSpout.y, mapObjects.waterSpout.width, mapObjects.waterSpout.height);
+      ctx.fillStyle = mapObjects.mealTable.color;
+      ctx.fillRect(mapObjects.mealTable.x, mapObjects.mealTable.y, mapObjects.mealTable.width, mapObjects.mealTable.height);
+      ctx.fillStyle = mapObjects.pit.color;
+      ctx.fillRect(mapObjects.pit.x, mapObjects.pit.y, mapObjects.pit.width, mapObjects.pit.height);
+
+      // Other players
+      for (const id in otherPlayers){
+        const p = otherPlayers[id];
+        ctx.fillStyle = p.cabin ? cabinColors[p.cabin] : '#7f8c8d';
+        ctx.beginPath(); ctx.arc(p.x, p.y, 10, 0, Math.PI*2); ctx.fill();
+      }
+
+      // Current player
+      ctx.fillStyle = player.cabin ? cabinColors[player.cabin] : '#f39c12';
+      ctx.beginPath(); ctx.arc(player.x, player.y, 10, 0, Math.PI*2); ctx.fill();
+
+      // UI
+      bullCoinsDisplay.textContent = player.bullCoins;
+      hungerBar.style.width = Math.max(0, player.hunger) + '%';
+      thirstBar.style.width = Math.max(0, player.thirst) + '%';
+      bathroomBar.style.width = Math.min(100, player.bathroom) + '%';
+    }
+
+    let lastMealTime = Date.now();
+    let lastFrameTime = performance.now();
+
+    function step(dt){
+      // Movement (pixels per second)
+      const speed = 140;
+      if (movement.up)    player.y -= speed * dt;
+      if (movement.down)  player.y += speed * dt;
+      if (movement.left)  player.x -= speed * dt;
+      if (movement.right) player.x += speed * dt;
+
+      // Clamp to canvas CSS size (we set transform so 1 unit = 1 CSS px)
+      const rect = screens.game.getBoundingClientRect();
+      player.x = Math.max(10, Math.min(rect.width - 10, player.x));
+      player.y = Math.max(10, Math.min(rect.height - 10, player.y));
+
+      // Needs decay (percent per second)
+      player.hunger = Math.max(0, player.hunger - 0.6 * dt);  // ~0.6%/s
+      player.thirst = Math.max(0, player.thirst - 1.2 * dt);  // ~1.2%/s
+
+      const bounds = { x: player.x-10, y: player.y-10, width:20, height:20 };
+
+      // Lake increases bathroom need
+      if (checkCollision(bounds, mapObjects.lake)) {
+        player.bathroom = Math.min(100, player.bathroom + 6 * dt);
+      }
+      // Water spout restores thirst
+      if (checkCollision(bounds, mapObjects.waterSpout)) {
+        player.thirst = Math.min(100, player.thirst + 60 * dt);
+      }
+      // Library = bathroom
+      if (checkCollision(bounds, mapObjects.library)) {
+        player.bathroom = Math.max(0, player.bathroom - 120 * dt);
+      }
+      // Meal table = eat
+      if (checkCollision(bounds, mapObjects.mealTable)) {
+        player.hunger = 100;
+        lastMealTime = Date.now();
+      }
+
+      // Hunger consequence: “pit”
+      const fiveMinutes = 5 * 60 * 1000;
+      if (Date.now() - lastMealTime > fiveMinutes && player.hunger < 50) {
+        player.bullCoins = Math.max(0, player.bullCoins - 20);
+        player.x = mapObjects.pit.x + mapObjects.pit.width/2;
+        player.y = mapObjects.pit.y + mapObjects.pit.height/2;
+        lastMealTime = Date.now();
+      }
+    }
+
+    function loop(now){
+      if (gameState !== 'playing') return;
+      const dt = Math.min(0.05, (now - lastFrameTime)/1000); // clamp big jumps
+      lastFrameTime = now;
+
+      step(dt);
+      drawGame();
+
+      // Throttled network update
+      safeUpdatePlayer({
+        x: player.x, y: player.y,
+        bullCoins: player.bullCoins,
+        hunger: player.hunger, thirst: player.thirst, bathroom: player.bathroom,
+        cabin: player.cabin
+      });
+
+      requestAnimationFrame(loop);
+    }
+
+    // --- Startup Flow ---
+    showOnly('loading'); // show something immediately
+
+    window.addEventListener('load', async ()=>{
+      if (ONLINE){
+        try{
+          app = initializeApp(firebaseConfig);
+          auth = getAuth();
+          db = getFirestore();
+
+          onAuthStateChanged(auth, async (user)=>{
+            if (user){
+              userId = user.uid;
+              player.id = userId;
+              userInfoDisplay.textContent = `User: ${userId.slice(0,6)}…`;
+              await loadPlayerState();
+              showOnly('bus_cutscene');
+            }else{
+              if (initialAuthToken){
+                try { await signInWithCustomToken(auth, initialAuthToken); }
+                catch(e){ await signInAnonymously(auth); }
+              }else{
+                await signInAnonymously(auth);
+              }
+            }
+          });
+        }catch(e){
+          // If config is wrong, drop to offline mode
+          console.warn('Firebase init failed, running offline:', e?.message);
+          userInfoDisplay.textContent = 'Offline mode';
+          showOnly('bus_cutscene');
+        }
+      } else {
+        // Offline local testing
+        userInfoDisplay.textContent = 'Offline mode';
+        userId = 'offline-' + Math.random().toString(36).slice(2,8);
+        player.id = userId;
+        showOnly('bus_cutscene');
+      }
+    });
+
+    // --- Events ---
+    document.getElementById('skip-bus-cutscene').addEventListener('click', ()=>{
+      showOnly('director_cutscene');
+    });
+
+    document.getElementById('skip-director-cutscene').addEventListener('click', ()=>{
+      showOnly('cabin_select');
+    });
+
+    document.querySelectorAll('.cabin-button').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        player.cabin = btn.getAttribute('data-cabin');
+        if (ONLINE && userId){
+          try{ await setDoc(doc(db, playersCollectionPath, userId), player, { merge:true }); }catch{}
+        }
+        showOnly('playing');
+        resizeCanvas();
+        // Center player
+        const rect = screens.game.getBoundingClientRect();
+        player.x = rect.width/2; player.y = rect.height/2;
+        lastFrameTime = performance.now();
+        gameCanvas.focus();
+        requestAnimationFrame(loop);
+      });
+    });
+
+    document.addEventListener('keydown', e=>{
+      if (gameState !== 'playing') return;
+      if (e.key==='ArrowUp'   || e.key==='w') movement.up = true;
+      if (e.key==='ArrowDown' || e.key==='s') movement.down = true;
+      if (e.key==='ArrowLeft' || e.key==='a') movement.left = true;
+      if (e.key==='ArrowRight'|| e.key==='d') movement.right = true;
+    });
+    document.addEventListener('keyup', e=>{
+      if (gameState !== 'playing') return;
+      if (e.key==='ArrowUp'   || e.key==='w') movement.up = false;
+      if (e.key==='ArrowDown' || e.key==='s') movement.down = false;
+      if (e.key==='ArrowLeft' || e.key==='a') movement.left = false;
+      if (e.key==='ArrowRight'|| e.key==='d') movement.right = false;
+    });
+
+    window.addEventListener('resize', ()=>{
+      if (gameState==='playing'){ resizeCanvas(); drawGame(); }
+    });
+  </script>
+</body>
+</html>
