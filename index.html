@@ -1,447 +1,550 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Camp Bull</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
-  <style>
-    body{
-      font-family: 'Inter', sans-serif;
-      background-color:#1a202c;color:#e2e8f0;
-      display:flex;justify-content:center;align-items:center;min-height:100vh;
-    }
-    #loading-screen,#cutscene-bus,#cutscene-director,#cabin-selection,#game-container{
-      display:none;flex-direction:column;align-items:center;justify-content:center;
-      width:100%;max-width:800px;min-height:600px;background-color:#2d3748;border-radius:12px;
-      box-shadow:0 4px 6px rgba(0,0,0,.1);padding:24px;
-    }
-    #game-canvas{
-      width:100%;height:100%;background-color:#3b4554;border-radius:8px;outline:none;
-    }
-    .cutscene-text{font-size:1.5rem;text-align:center;margin-top:16px;}
-    .animated-text{animation:fadeIn 2s ease-in-out forwards;}
-    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-    .fade-in{opacity:0;animation:fadeIn 1s forwards;}
-    .max-marquez{
-      width:200px;height:50px;
-      background-image:url('https://placehold.co/200x400/0891b2/ffffff?text=Max+Marquez');
-      background-size:cover;background-position:center bottom;animation:panUp 3s forwards;border-radius:10px;
-    }
-    @keyframes panUp{from{height:50px}to{height:400px}}
-    .dialogue-box{background-color:rgba(0,0,0,.5);padding:1rem;border-radius:8px;margin-top:1rem;}
-    .cabin-button{transition:transform .2s,box-shadow .2s;}
-    .cabin-button:hover{transform:translateY(-5px);box-shadow:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -2px rgba(0,0,0,.05);}
-    .currency-box{
-      position:absolute;bottom:24px;left:24px;background-color:#2d3748;padding:8px 16px;border-radius:8px;
-      display:flex;align-items:center;gap:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);
-    }
-    .status-bar{
-      position:absolute;top:24px;left:24px;background-color:#2d3748;padding:8px 16px;border-radius:8px;
-      box-shadow:0 4px 6px rgba(0,0,0,.1);display:flex;flex-direction:column;gap:8px;
-    }
-    .bar-container{width:150px;height:20px;background-color:#555;border-radius:10px;overflow:hidden;border:1px solid #777;}
-    .bar-fill{height:100%;transition:width .3s ease-in-out;}
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Camp Bull — 3D</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet"/>
+<style>
+  :root{ --panel-w: 1040px; --panel-h: 680px; }
+  body{ font-family:'Inter',sans-serif; background:#0b1020; color:#e2e8f0;
+        display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; }
+  #screen{ width:100%; max-width:var(--panel-w); min-height:var(--panel-h);
+           background:#1f2937; border-radius:12px; padding:16px; position:relative; box-shadow:0 8px 24px rgba(0,0,0,.35);}
+  #three-root{ width:100%; height:620px; background:#0f172a; border-radius:8px; overflow:hidden; position:relative; }
+  .hud{ position:absolute; z-index:10; pointer-events:none; }
+  #hud-left{ top:18px; left:18px; display:flex; gap:8px; flex-direction:column; pointer-events:auto;}
+  #hud-left .bar-row{ display:flex; align-items:center; gap:8px; }
+  .bar{ width:160px; height:18px; border-radius:10px; background:#485164; overflow:hidden; border:1px solid #65708a;}
+  .fill{ height:100%; transition:width .25s; }
+  #coins{ position:absolute; bottom:18px; left:18px; pointer-events:auto;
+          background:#1f2937; padding:8px 12px; border-radius:8px; display:flex; align-items:center; gap:6px; }
+  #user-id{ opacity:.55; font-size:12px; }
+  #cabin-score{ position:absolute; top:18px; right:18px; background:#1f2937; padding:10px 12px; border-radius:8px; pointer-events:auto;}
+  #event-banner{ position:absolute; top:18px; left:50%; transform:translateX(-50%);
+                 background:#0b5; color:#02140b; padding:6px 12px; border-radius:8px; display:none; font-weight:700;}
+  #quest-box{ position:absolute; bottom:18px; right:18px; background:#1f2937; padding:10px 12px; border-radius:8px; max-width:280px; }
+  #chat{ position:absolute; bottom:18px; left:50%; transform:translateX(-50%); width:40%;
+         background:#111827; border:1px solid #2a3243; border-radius:10px; overflow:hidden; pointer-events:auto; }
+  #chat-log{ height:120px; overflow:auto; padding:8px 10px; font-size:14px; }
+  #chat input{ width:100%; outline:none; border:none; padding:10px; background:#0b1225; color:#e2e8f0; font-size:14px; }
+  .btn{ padding:8px 12px; border-radius:8px; background:#2563eb; color:#fff; font-weight:700; }
+  #screens{ display:none; }
+  #cutscene, #cabins { display:none; align-items:center; justify-content:center; gap:16px; }
+  #top-row{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
+  #shop-tip{ position:absolute; right:50%; top:50%; transform:translate(390px,-210px);
+             background:#1f2937; padding:8px 10px; border-radius:8px; font-size:12px; opacity:.9;}
+</style>
 </head>
-<body class="bg-gray-900 text-white">
-
-  <!-- Screens -->
-  <div id="loading-screen" class="flex">
-    <div class="text-xl animate-pulse">Loading Camp Bull…</div>
-  </div>
-
-  <div id="cutscene-bus" class="flex">
-    <img src="https://placehold.co/600x300/60a5fa/ffffff?text=Bus+View" alt="Bus Window View" class="rounded-xl shadow-lg mb-6" />
-    <p class="cutscene-text animated-text">The bus rumbles along a long, winding dirt road. Through the window, you see tall pine trees and the shimmer of a lake in the distance. This is it. Camp Bull.</p>
-    <button id="skip-bus-cutscene" class="mt-8 px-6 py-3 bg-blue-500 rounded-lg text-white font-bold hover:bg-blue-600 transition-colors">Continue</button>
-  </div>
-
-  <div id="cutscene-director" class="flex">
-    <div class="max-marquez"></div>
-    <div class="dialogue-box text-center fade-in">
-      <h2 class="text-2xl font-bold">Max Marquez</h2>
-      <p>Welcome to Camp Bull, future campers! I'm Max Marquez, your camp director. We have five amazing cabins you can join, each with its own legacy. Choose wisely!</p>
-    </div>
-    <button id="skip-director-cutscene" class="mt-8 px-6 py-3 bg-blue-500 rounded-lg text-white font-bold hover:bg-blue-600 transition-colors">Choose Your Cabin</button>
-  </div>
-
-  <div id="cabin-selection" class="flex">
-    <h1 class="text-3xl font-bold mb-8 text-center">Choose Your Cabin</h1>
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      <button class="cabin-button p-6 rounded-xl bg-gray-700 text-center" data-cabin="Bobcat">
-        <h2 class="text-xl font-semibold">Bobcat</h2><p>Agile and stealthy.</p>
-      </button>
-      <button class="cabin-button p-6 rounded-xl bg-gray-700 text-center" data-cabin="Eagle">
-        <h2 class="text-xl font-semibold">Eagle</h2><p>Soaring to new heights.</p>
-      </button>
-      <button class="cabin-button p-6 rounded-xl bg-gray-700 text-center" data-cabin="Bull">
-        <h2 class="text-xl font-semibold">Bull</h2><p>Strong and resilient.</p>
-      </button>
-      <button class="cabin-button p-6 rounded-xl bg-gray-700 text-center" data-cabin="Bass">
-        <h2 class="text-xl font-semibold">Bass</h2><p>Deep and wise.</p>
-      </button>
-      <button class="cabin-button p-6 rounded-xl bg-gray-700 text-center" data-cabin="Cheetah">
-        <h2 class="text-xl font-semibold">Cheetah</h2><p>Fast and focused.</p>
-      </button>
-    </div>
-  </div>
-
-  <div id="game-container" class="flex relative">
-    <canvas id="game-canvas" tabindex="0" aria-label="Camp Bull canvas"></canvas>
-
-    <div class="currency-box">
-      <span class="text-yellow-300 text-lg">💰</span>
-      <span id="bull-coins" class="text-lg font-bold">0</span>
-      <span class="text-white">Bull Coins</span>
-      <div id="user-info" class="text-xs absolute -right-2 -bottom-6 p-2 opacity-50"></div>
+<body>
+  <div id="screen">
+    <div id="top-row">
+      <div class="text-xl font-bold">Camp Bull</div>
+      <div id="user-id"></div>
     </div>
 
-    <div class="status-bar">
-      <div class="flex items-center gap-2">
-        <span class="text-xl">🍔</span><span class="w-24">Hunger</span>
-        <div class="bar-container"><div id="hunger-bar" class="bar-fill bg-red-500" style="width:100%;"></div></div>
+    <div id="screens">
+      <div id="loading" class="text-center text-lg">Loading Camp Bull…</div>
+
+      <div id="cutscene" class="flex flex-col text-center">
+        <img src="https://placehold.co/640x260/60a5fa/ffffff?text=Bus+to+Camp" class="rounded mb-4" alt="">
+        <p class="opacity-90">You arrive at Camp Bull. Pines sway. A lake glitters. Time to pick your cabin.</p>
+        <button id="to-cabins" class="btn inline-block mt-3">Continue</button>
       </div>
-      <div class="flex items-center gap-2">
-        <span class="text-xl">💧</span><span class="w-24">Thirst</span>
-        <div class="bar-container"><div id="thirst-bar" class="bar-fill bg-blue-500" style="width:100%;"></div></div>
-      </div>
-      <div class="flex items-center gap-2">
-        <span class="text-xl">🚽</span><span class="w-24">Bathroom</span>
-        <div class="bar-container"><div id="bathroom-bar" class="bar-fill bg-green-500" style="width:0%;"></div></div>
+
+      <div id="cabins" class="flex flex-col">
+        <div class="text-2xl font-bold mb-3">Choose your Cabin</div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <button class="btn" data-cabin="Bobcat">Bobcat — Agile</button>
+          <button class="btn" data-cabin="Eagle">Eagle — Soaring</button>
+          <button class="btn" data-cabin="Bull">Bull — Strong</button>
+          <button class="btn" data-cabin="Bass">Bass — Wise</button>
+          <button class="btn" data-cabin="Cheetah">Cheetah — Fast</button>
+        </div>
       </div>
     </div>
+
+    <div id="three-root" aria-label="3D world"></div>
+
+    <!-- HUD -->
+    <div id="event-banner" class="hud">Event: Heat Wave — Thirst drains faster</div>
+
+    <div id="hud-left" class="hud">
+      <div class="bar-row"><span>🍔 Hunger</span><div class="bar"><div id="hunger" class="fill" style="width:100%;background:#ef4444"></div></div></div>
+      <div class="bar-row"><span>💧 Thirst</span><div class="bar"><div id="thirst" class="fill" style="width:100%;background:#3b82f6"></div></div></div>
+      <div class="bar-row"><span>🚽 Bathroom</span><div class="bar"><div id="bathroom" class="fill" style="width:0%;background:#22c55e"></div></div></div>
+    </div>
+
+    <div id="coins" class="hud"><span>💰</span><b id="coin-val">0</b><span>Bull Coins</span></div>
+
+    <div id="cabin-score" class="hud">
+      <div class="font-bold mb-1">Cabin Rivalry</div>
+      <div id="score-list" class="text-sm space-y-1"></div>
+    </div>
+
+    <div id="quest-box" class="hud">
+      <div class="font-bold">Quest</div>
+      <div id="quest-text" class="text-sm opacity-90">—</div>
+    </div>
+
+    <div id="shop-tip" class="text-sm hidden">Shop 🛒: Press <b>E</b> to buy (Snack=5, Water=3)</div>
+
+    <div id="chat">
+      <div id="chat-log"></div>
+      <input id="chat-input" placeholder="Press Enter to chat (throttled)…"/>
+    </div>
   </div>
 
-  <!-- Firebase + Game -->
+  <!-- Three.js -->
   <script type="module">
-    // Firebase SDKs
+    import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+    import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js";
+
+    // Firebase
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, onSnapshot, collection, addDoc, getDoc, updateDoc, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, onSnapshot, collection, getDoc, updateDoc, addDoc, serverTimestamp, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // --- Config & Globals ---
+    // --- Config / Globals ---
     const firebaseConfig = JSON.parse(typeof window.__firebase_config !== 'undefined' ? window.__firebase_config : '{}');
     const appId = typeof window.__app_id !== 'undefined' ? window.__app_id : 'default-app-id';
     const initialAuthToken = typeof window.__initial_auth_token !== 'undefined' ? window.__initial_auth_token : null;
     const ONLINE = Boolean(firebaseConfig && firebaseConfig.apiKey);
 
-    let app, db, auth, userId;
-    const playersCollectionPath = `artifacts/${appId}/public/data/players`;
+    let app, db, auth, userId = 'offline-' + Math.random().toString(36).slice(2,8);
+    const basePath = `artifacts/${appId}/public/data`;
+    const playersCol = `${basePath}/players`;
+    const cabinsDocPath = `${basePath}/meta/cabinScores`;
+    const chatCol = `${basePath}/chat`;
 
-    // --- DOM & Canvas ---
-    const screens = {
-      loading: document.getElementById('loading-screen'),
-      bus: document.getElementById('cutscene-bus'),
-      director: document.getElementById('cutscene-director'),
-      cabins: document.getElementById('cabin-selection'),
-      game: document.getElementById('game-container'),
-    };
-    const gameCanvas = document.getElementById('game-canvas');
-    const ctx = gameCanvas.getContext('2d');
-    const bullCoinsDisplay = document.getElementById('bull-coins');
-    const hungerBar = document.getElementById('hunger-bar');
-    const thirstBar = document.getElementById('thirst-bar');
-    const bathroomBar = document.getElementById('bathroom-bar');
-    const userInfoDisplay = document.getElementById('user-info');
-
-    // --- State ---
-    let gameState = 'loading'; // loading, bus_cutscene, director_cutscene, cabin_select, playing
     const cabinColors = { Bobcat:'#ff7f00', Eagle:'#3498db', Bull:'#c0392b', Bass:'#27ae60', Cheetah:'#f1c40f' };
-    const movement = { up:false, down:false, left:false, right:false };
 
-    const mapObjects = {
-      waterSpout:{ x:50,  y:50,  width:20,  height:20,  color:'#3498db' },
-      library:   { x:700, y:500, width:100, height:80,  color:'#8e44ad' },
-      lake:      { x:150, y:300, width:250, height:150, color:'#2980b9' },
-      mealTable: { x:50,  y:500, width:100, height:80,  color:'#c0392b' },
-      pit:       { x:300, y:100, width:150, height:150, color:'#2c3e50' }
+    // --- UI refs ---
+    const root = document.getElementById('three-root');
+    const userIdEl = document.getElementById('user-id');
+    const eventBanner = document.getElementById('event-banner');
+    const hungerEl = document.getElementById('hunger');
+    const thirstEl = document.getElementById('thirst');
+    const bathroomEl = document.getElementById('bathroom');
+    const coinsEl = document.getElementById('coin-val');
+    const scoreList = document.getElementById('score-list');
+    const questText = document.getElementById('quest-text');
+    const shopTip = document.getElementById('shop-tip');
+    const chatLog = document.getElementById('chat-log');
+    const chatInput = document.getElementById('chat-input');
+
+    // Simple screen flow
+    const screens = {
+      wrapper: document.getElementById('screens'),
+      loading: document.getElementById('loading'),
+      cutscene: document.getElementById('cutscene'),
+      cabins: document.getElementById('cabins'),
     };
+    function show(id){
+      screens.wrapper.style.display = 'block';
+      for (const key of ['loading','cutscene','cabins']) screens[key].style.display='none';
+      screens[id].style.display = 'flex';
+    }
 
+    // --- Player State ---
     let player = {
-      id:null, x:0, y:0, bullCoins:0, cabin:null,
-      username:`Camper_${Math.floor(Math.random()*10000)}`,
-      hunger:100, thirst:100, bathroom:0
+      id:userId, username:`Camper_${Math.floor(Math.random()*10000)}`,
+      cabin:null, x:0, z:0, rot:0,
+      bullCoins:20, hunger:100, thirst:100, bathroom:0,
     };
-    const otherPlayers = {};
+    const others = {}; // id -> {mesh, label, state}
 
-    // --- Utilities ---
-    function showOnly(name){
-      Object.values(screens).forEach(el=>el.style.display='none');
-      if (name==='loading') screens.loading.style.display='flex';
-      if (name==='bus_cutscene') screens.bus.style.display='flex';
-      if (name==='director_cutscene') screens.director.style.display='flex';
-      if (name==='cabin_select') screens.cabins.style.display='flex';
-      if (name==='playing') screens.game.style.display='flex';
-      gameState = name==='bus_cutscene'?'bus_cutscene':
-                  name==='director_cutscene'?'director_cutscene':
-                  name==='cabin_select'?'cabin_select':
-                  name==='playing'?'playing':'loading';
+    // --- Three.js scene ---
+    const scene = new THREE.Scene();
+    const renderer = new THREE.WebGLRenderer({ antialias:true });
+    renderer.shadowMap.enabled = true;
+    root.appendChild(renderer.domElement);
+
+    // Camera & controls (locked to follow)
+    const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 5000);
+    camera.position.set(0, 30, 45);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enablePan = false; controls.enableZoom = false; controls.enableRotate = false;
+
+    // Resize
+    function resize(){
+      const w = root.clientWidth, h = root.clientHeight;
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h; camera.updateProjectionMatrix();
+    }
+    addEventListener('resize', resize);
+
+    // Lights
+    const hemi = new THREE.HemisphereLight(0xbdd9ff, 0x334455, 0.6);
+    scene.add(hemi);
+    const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+    sun.position.set(60, 120, 40);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(1024,1024);
+    sun.shadow.camera.near = 10; sun.shadow.camera.far = 300;
+    scene.add(sun);
+
+    // Ground
+    const groundMat = new THREE.MeshStandardMaterial({ color:0x2f3b2f, roughness:1 });
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(220, 220), groundMat);
+    ground.rotation.x = -Math.PI/2; ground.receiveShadow = true;
+    scene.add(ground);
+
+    // Lake (simple glossy plane)
+    const lakeMat = new THREE.MeshPhysicalMaterial({ color:0x2a74b8, metalness:0.1, roughness:0.2, clearcoat:0.8, transmission:0.0 });
+    const lake = new THREE.Mesh(new THREE.CircleGeometry(40, 32), lakeMat);
+    lake.rotation.x = -Math.PI/2; lake.position.set(-50, 0.02, -20);
+    scene.add(lake);
+
+    // Cabins (five boxes)
+    const cabinSpots = {
+      Bobcat:  new THREE.Vector3(-80,0,  60),
+      Eagle:   new THREE.Vector3( 80,0,  60),
+      Bull:    new THREE.Vector3(  0,0,  80),
+      Bass:    new THREE.Vector3(-60,0,-70),
+      Cheetah: new THREE.Vector3( 60,0,-70),
+    };
+    const cabins = {};
+    for (const [name,pos] of Object.entries(cabinSpots)){
+      const m = new THREE.Mesh(
+        new THREE.BoxGeometry(22, 10, 16),
+        new THREE.MeshStandardMaterial({ color:new THREE.Color(cabinColors[name]) })
+      );
+      m.position.copy(pos); m.castShadow = true; m.receiveShadow = true;
+      scene.add(m);
+      cabins[name] = m;
+      // label pole
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.6,10,8), new THREE.MeshStandardMaterial({color:0x222}));
+      pole.position.set(pos.x,5,pos.z+12); pole.castShadow = true; scene.add(pole);
     }
 
-    function resizeCanvas(){
-      const dpr = window.devicePixelRatio || 1;
-      const rect = screens.game.getBoundingClientRect();
-      // Set backing store size for crisp pixels
-      gameCanvas.width = Math.max(1, Math.floor(rect.width * dpr));
-      gameCanvas.height = Math.max(1, Math.floor(rect.height * dpr));
-      // Keep CSS size for layout
-      gameCanvas.style.width = rect.width + 'px';
-      gameCanvas.style.height = rect.height + 'px';
-      // Scale drawing to CSS pixels
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // Trees
+    function addTree(x,z){
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.6,0.8,6,6), new THREE.MeshStandardMaterial({color:0x7a4f2b}));
+      trunk.position.set(x,3,z); trunk.castShadow=true; scene.add(trunk);
+      const leaves = new THREE.Mesh(new THREE.ConeGeometry(4,10,7), new THREE.MeshStandardMaterial({color:0x274f27, roughness:1}));
+      leaves.position.set(x,11,z); leaves.castShadow=true; scene.add(leaves);
+    }
+    for (let i=0;i<28;i++){
+      addTree((Math.random()*180-90), (Math.random()*180-90));
     }
 
-    function checkCollision(a,b){
-      return a.x < b.x + b.width &&
-             a.x + a.width > b.x &&
-             a.y < b.y + b.height &&
-             a.y + a.height > b.y;
+    // Meal table & water spout & library & shop kiosk
+    function box(w,h,d,color){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshStandardMaterial({color}));
+      m.castShadow=true; m.receiveShadow=true; return m; }
+    const mealTable = box(14,1,8,0xa13333); mealTable.position.set(-10,0.6,70); scene.add(mealTable);
+    const waterSpout = box(3,6,3,0x3da5ff); waterSpout.position.set(-15,3,30); scene.add(waterSpout);
+    const library = box(26,12,18,0x7a49ae); library.position.set(85,6,-10); scene.add(library);
+    const shop = box(10,8,10,0x2b5f7a); shop.position.set(5,4,-5); scene.add(shop);
+
+    // Pit
+    const pit = box(30,2,30,0x202a32); pit.position.set(30,1,90); scene.add(pit);
+
+    // Player (capsule-ish)
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(2, 3, 8, 12), new THREE.MeshStandardMaterial({ color:0xf39c12 }));
+    body.castShadow = true; scene.add(body);
+    player.x = 0; player.z = 0;
+
+    // Others cache
+    function ensureOther(id, color=0x888888){
+      if (others[id]) return others[id];
+      const m = new THREE.Mesh(new THREE.CapsuleGeometry(2, 3, 8, 12), new THREE.MeshStandardMaterial({ color }));
+      m.castShadow = true; scene.add(m);
+      others[id] = { mesh:m, state:{} };
+      return others[id];
     }
 
-    // --- Firebase: guarded init & throttled writes ---
-    let lastSentAt = 0;
-    let sendMinMs = 150; // ~6-7 writes/sec max
-    let prevSent = null;
-
-    function stateDiff(a,b){
-      if (!a || !b) return true;
-      return a.x!==b.x || a.y!==b.y ||
-             a.bullCoins!==b.bullCoins ||
-             a.hunger!==b.hunger ||
-             a.thirst!==b.thirst ||
-             a.bathroom!==b.bathroom ||
-             a.cabin!==b.cabin;
+    // Camera follow
+    function followCamera(){
+      const target = new THREE.Vector3(player.x, 3.0, player.z);
+      const behind = new THREE.Vector3(Math.sin(player.rot), 0, Math.cos(player.rot)).multiplyScalar(-14);
+      const eye = target.clone().add(new THREE.Vector3(0, 10, 0)).add(behind);
+      camera.position.lerp(eye, 0.2);
+      camera.lookAt(target);
     }
 
-    async function safeUpdatePlayer(statePartial){
-      if (!ONLINE || !userId) return;
+    // Movement
+    const keys = {w:0,a:0,s:0,d:0};
+    addEventListener('keydown',e=>{ if(e.key==='w')keys.w=1;if(e.key==='a')keys.a=1;if(e.key==='s')keys.s=1;if(e.key==='d')keys.d=1;if(e.key==='E'||e.key==='e')tryShop();});
+    addEventListener('keyup',e=>{ if(e.key==='w')keys.w=0;if(e.key==='a')keys.a=0;if(e.key==='s')keys.s=0;if(e.key==='d')keys.d=0;});
+
+    let velX=0, velZ=0;
+    function stepMove(dt){
+      const acc = 40, drag = 12, max = 18;
+      const fwd = (keys.w - keys.s), str = (keys.d - keys.a);
+      // rotate intent into world
+      const sin = Math.sin(player.rot), cos = Math.cos(player.rot);
+      const ix = (str*cos + fwd*sin), iz = (str*-sin + fwd*cos);
+      velX += ix * acc * dt; velZ += iz * acc * dt;
+      // clamp
+      const spd = Math.hypot(velX, velZ);
+      if (spd > max){ velX *= max/spd; velZ *= max/spd; }
+      // drag
+      velX = THREE.MathUtils.damp(velX, 0, drag, dt);
+      velZ = THREE.MathUtils.damp(velZ, 0, drag, dt);
+      player.x += velX * dt; player.z += velZ * dt;
+      // keep on ground and in bounds
+      player.x = Math.max(-105, Math.min(105, player.x));
+      player.z = Math.max(-105, Math.min(105, player.z));
+      // face velocity if moving
+      if (Math.hypot(velX,velZ) > 0.3){
+        player.rot = Math.atan2(velX, velZ);
+      }
+      body.position.set(player.x, 3.5, player.z);
+      body.rotation.y = player.rot;
+    }
+
+    // Day/Night cycle (600s loop)
+    const dayLen = 600; // seconds
+    function applyDayNight(t){
+      // t: 0..1
+      const k = Math.sin(t*Math.PI); // high at midday
+      sun.intensity = 0.3 + 0.9 * k;
+      hemi.intensity = 0.4 + 0.4 * k;
+      scene.background = new THREE.Color().setHSL(0.6, 0.6, 0.15 + 0.35*k);
+    }
+
+    // Ambient audio (optional)
+    const audio = new Audio();
+    audio.loop = true;
+    // small synthesized “water-ish” fallback data uri (very quiet), you can replace with your own mp3/ogg URLs
+    audio.src = "data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAA"; // (placeholder; silent)
+    document.body.addEventListener('click', ()=>{ audio.play().catch(()=>{}); }, { once:true });
+
+    // Gameplay needs & interactions
+    const AABB = (x,z,w,d,obj)=> (player.x>obj.x-w && player.x<obj.x+w && player.z>obj.z-d && player.z<obj.z+d);
+    const objPos = {
+      lake: {x: lake.position.x, z: lake.position.z, w: 42, d: 42},
+      spout:{x: waterSpout.position.x, z: waterSpout.position.z, w: 4, d: 4},
+      library:{x: library.position.x, z: library.position.z, w: 14, d: 12},
+      meal:{x: mealTable.position.x, z: mealTable.position.z, w: 10, d: 7},
+      shop:{x: shop.position.x, z: shop.position.z, w: 8, d: 8},
+      pit: {x: pit.position.x, z: pit.position.z, w: 14, d: 14},
+    };
+
+    // Events system (global modifiers)
+    const events = [
+      { key:'heat', name:'Heat Wave', desc:'Thirst drains faster', start:60, end:160, thirstMul:1.8 },
+      { key:'rain', name:'Rain', desc:'Thirst drains slower, hunger slightly faster', start:280, end:360, thirstMul:0.6, hungerMul:1.2 },
+    ];
+    function activeEvent(tSec){
+      return events.find(e => tSec>=e.start && tSec<=e.end) || null;
+    }
+
+    // Quests
+    let quest = { key:'fetch_water', text:'Fetch water at the spout (stand next to it for 2s).', progress:0, done:false };
+
+    // Economy / Shop
+    let nearShop = false;
+    function tryShop(){
+      if (!nearShop) return;
+      // simple menu: prefer water if thirst<80, otherwise snack
+      if (player.thirst < 80 && player.bullCoins >= 3){
+        player.thirst = Math.min(100, player.thirst + 30); player.bullCoins -= 3;
+        addCabinScore(player.cabin, 1, 'Hydration purchase');
+      } else if (player.bullCoins >= 5){
+        player.hunger = Math.min(100, player.hunger + 30); player.bullCoins -= 5;
+        addCabinScore(player.cabin, 1, 'Snack purchase');
+      }
+      coinsEl.textContent = player.bullCoins|0;
+      queueStateSend();
+    }
+
+    // HUD helpers
+    function updateHUD(){
+      hungerEl.style.width = Math.max(0, player.hunger) + '%';
+      thirstEl.style.width = Math.max(0, player.thirst) + '%';
+      bathroomEl.style.width = Math.min(100, player.bathroom) + '%';
+      coinsEl.textContent = player.bullCoins|0;
+    }
+
+    // Cabin scores HUD
+    let cabinScores = { Bobcat:0, Eagle:0, Bull:0, Bass:0, Cheetah:0 };
+    function renderScores(){
+      scoreList.innerHTML = Object.entries(cabinScores)
+        .map(([k,v])=>`<div><b style="color:${cabinColors[k]}">${k}</b>: ${v|0}</div>`).join('');
+    }
+    function addCabinScore(cabin, amount, reason=''){
+      if (!cabin) return;
+      cabinScores[cabin] = (cabinScores[cabin]||0) + amount;
+      renderScores();
+      if (ONLINE) updateDoc(doc(db, cabinsDocPath), { [cabin]: cabinScores[cabin] }).catch(()=>{});
+    }
+
+    // Networking (throttled)
+    let lastSend=0, sendEvery=140; let lastSnapshot = null;
+    function queueStateSend(){
       const now = performance.now();
-      const merged = { ...player, ...statePartial };
-      if (!stateDiff(merged, prevSent) && (now - lastSentAt) < 1000) return; // avoid dup spam
-      if ((now - lastSentAt) < sendMinMs) return; // throttle
-      try{
-        await updateDoc(doc(db, playersCollectionPath, userId), statePartial);
-        prevSent = { ...player }; // snapshot after send
-        lastSentAt = now;
-      }catch(err){
-        // Swallow rate-limit errors locally; keep game running
-        // console.warn('Update skipped:', err?.message);
-      }
+      if (now - lastSend < sendEvery) return;
+      lastSend = now;
+      if (!ONLINE || !userId || !player.cabin) return;
+      const ref = doc(db, playersCol, userId);
+      const payload = {
+        id:userId, x:player.x, z:player.z, rot:player.rot,
+        hunger:player.hunger, thirst:player.thirst, bathroom:player.bathroom,
+        bullCoins:player.bullCoins, cabin:player.cabin, username:player.username,
+        ts: Date.now()
+      };
+      if (JSON.stringify(payload) === lastSnapshot) return;
+      lastSnapshot = JSON.stringify(payload);
+      updateDoc(ref, payload).catch(()=>{ setDoc(ref, payload, { merge:true }).catch(()=>{}); });
     }
 
-    async function loadPlayerState(){
-      if (!ONLINE) return;
-      const ref = doc(db, playersCollectionPath, userId);
-      const snap = await getDoc(ref);
-      if (snap.exists()) {
-        player = { ...player, ...snap.data() };
+    // Chat (throttled)
+    let lastChatAt = 0;
+    chatInput.addEventListener('keydown', async (e)=>{
+      if (e.key !== 'Enter') return;
+      const text = chatInput.value.trim(); if (!text) return;
+      const now = Date.now(); if (now - lastChatAt < 1500) { chatInput.value=''; return; }
+      lastChatAt = now; chatInput.value='';
+      if (ONLINE){
+        await addDoc(collection(db, chatCol), { uid:userId, name:player.username, cabin:player.cabin||'—', text, ts:serverTimestamp() }).catch(()=>{});
       } else {
-        await setDoc(ref, player);
+        appendChat({name:player.username, cabin:player.cabin||'—', text});
       }
-      onSnapshot(collection(db, playersCollectionPath), (snapshot)=>{
-        snapshot.docChanges().forEach(change=>{
-          const data = change.doc.data();
-          if (!data || !data.id) return;
-          if (data.id === userId){
-            // Keep local authoratitive; but merge server changes like cabin if set elsewhere
-            player = { ...player, ...data };
-          } else {
-            otherPlayers[data.id] = data;
-          }
-        });
-      });
+    });
+    function appendChat(m){
+      const line = document.createElement('div');
+      line.innerHTML = `<b>${m.name}</b> <span class="opacity-50">[${m.cabin}]</span>: ${m.text}`;
+      chatLog.appendChild(line); chatLog.scrollTop = chatLog.scrollHeight;
     }
 
-    // --- Drawing & Game Loop ---
-    function drawGame(){
-      ctx.clearRect(0,0,gameCanvas.width,gameCanvas.height);
+    // Auth / Init
+    async function boot(){
+      resize();
+      document.getElementById('screens').style.display = 'block';
+      show('loading');
 
-      // Draw map
-      ctx.fillStyle = mapObjects.lake.color;
-      ctx.fillRect(mapObjects.lake.x, mapObjects.lake.y, mapObjects.lake.width, mapObjects.lake.height);
-      ctx.fillStyle = mapObjects.library.color;
-      ctx.fillRect(mapObjects.library.x, mapObjects.library.y, mapObjects.library.width, mapObjects.library.height);
-      ctx.fillStyle = mapObjects.waterSpout.color;
-      ctx.fillRect(mapObjects.waterSpout.x, mapObjects.waterSpout.y, mapObjects.waterSpout.width, mapObjects.waterSpout.height);
-      ctx.fillStyle = mapObjects.mealTable.color;
-      ctx.fillRect(mapObjects.mealTable.x, mapObjects.mealTable.y, mapObjects.mealTable.width, mapObjects.mealTable.height);
-      ctx.fillStyle = mapObjects.pit.color;
-      ctx.fillRect(mapObjects.pit.x, mapObjects.pit.y, mapObjects.pit.width, mapObjects.pit.height);
-
-      // Other players
-      for (const id in otherPlayers){
-        const p = otherPlayers[id];
-        ctx.fillStyle = p.cabin ? cabinColors[p.cabin] : '#7f8c8d';
-        ctx.beginPath(); ctx.arc(p.x, p.y, 10, 0, Math.PI*2); ctx.fill();
-      }
-
-      // Current player
-      ctx.fillStyle = player.cabin ? cabinColors[player.cabin] : '#f39c12';
-      ctx.beginPath(); ctx.arc(player.x, player.y, 10, 0, Math.PI*2); ctx.fill();
-
-      // UI
-      bullCoinsDisplay.textContent = player.bullCoins;
-      hungerBar.style.width = Math.max(0, player.hunger) + '%';
-      thirstBar.style.width = Math.max(0, player.thirst) + '%';
-      bathroomBar.style.width = Math.min(100, player.bathroom) + '%';
-    }
-
-    let lastMealTime = Date.now();
-    let lastFrameTime = performance.now();
-
-    function step(dt){
-      // Movement (pixels per second)
-      const speed = 140;
-      if (movement.up)    player.y -= speed * dt;
-      if (movement.down)  player.y += speed * dt;
-      if (movement.left)  player.x -= speed * dt;
-      if (movement.right) player.x += speed * dt;
-
-      // Clamp to canvas CSS size (we set transform so 1 unit = 1 CSS px)
-      const rect = screens.game.getBoundingClientRect();
-      player.x = Math.max(10, Math.min(rect.width - 10, player.x));
-      player.y = Math.max(10, Math.min(rect.height - 10, player.y));
-
-      // Needs decay (percent per second)
-      player.hunger = Math.max(0, player.hunger - 0.6 * dt);  // ~0.6%/s
-      player.thirst = Math.max(0, player.thirst - 1.2 * dt);  // ~1.2%/s
-
-      const bounds = { x: player.x-10, y: player.y-10, width:20, height:20 };
-
-      // Lake increases bathroom need
-      if (checkCollision(bounds, mapObjects.lake)) {
-        player.bathroom = Math.min(100, player.bathroom + 6 * dt);
-      }
-      // Water spout restores thirst
-      if (checkCollision(bounds, mapObjects.waterSpout)) {
-        player.thirst = Math.min(100, player.thirst + 60 * dt);
-      }
-      // Library = bathroom
-      if (checkCollision(bounds, mapObjects.library)) {
-        player.bathroom = Math.max(0, player.bathroom - 120 * dt);
-      }
-      // Meal table = eat
-      if (checkCollision(bounds, mapObjects.mealTable)) {
-        player.hunger = 100;
-        lastMealTime = Date.now();
-      }
-
-      // Hunger consequence: “pit”
-      const fiveMinutes = 5 * 60 * 1000;
-      if (Date.now() - lastMealTime > fiveMinutes && player.hunger < 50) {
-        player.bullCoins = Math.max(0, player.bullCoins - 20);
-        player.x = mapObjects.pit.x + mapObjects.pit.width/2;
-        player.y = mapObjects.pit.y + mapObjects.pit.height/2;
-        lastMealTime = Date.now();
-      }
-    }
-
-    function loop(now){
-      if (gameState !== 'playing') return;
-      const dt = Math.min(0.05, (now - lastFrameTime)/1000); // clamp big jumps
-      lastFrameTime = now;
-
-      step(dt);
-      drawGame();
-
-      // Throttled network update
-      safeUpdatePlayer({
-        x: player.x, y: player.y,
-        bullCoins: player.bullCoins,
-        hunger: player.hunger, thirst: player.thirst, bathroom: player.bathroom,
-        cabin: player.cabin
-      });
-
-      requestAnimationFrame(loop);
-    }
-
-    // --- Startup Flow ---
-    showOnly('loading'); // show something immediately
-
-    window.addEventListener('load', async ()=>{
       if (ONLINE){
         try{
           app = initializeApp(firebaseConfig);
-          auth = getAuth();
-          db = getFirestore();
-
-          onAuthStateChanged(auth, async (user)=>{
-            if (user){
-              userId = user.uid;
-              player.id = userId;
-              userInfoDisplay.textContent = `User: ${userId.slice(0,6)}…`;
-              await loadPlayerState();
-              showOnly('bus_cutscene');
-            }else{
+          auth = getAuth(); db = getFirestore();
+          onAuthStateChanged(auth, async (u)=>{
+            if (u){ userId = u.uid; player.id = userId; userIdEl.textContent = `User: ${userId.slice(0,6)}…`; await onlineInit(); }
+            else {
               if (initialAuthToken){
-                try { await signInWithCustomToken(auth, initialAuthToken); }
-                catch(e){ await signInAnonymously(auth); }
-              }else{
-                await signInAnonymously(auth);
-              }
+                try{ await signInWithCustomToken(auth, initialAuthToken); }catch{ await signInAnonymously(auth); }
+              } else await signInAnonymously(auth);
             }
           });
-        }catch(e){
-          // If config is wrong, drop to offline mode
-          console.warn('Firebase init failed, running offline:', e?.message);
-          userInfoDisplay.textContent = 'Offline mode';
-          showOnly('bus_cutscene');
+        }catch{
+          userIdEl.textContent = 'Offline mode'; offlineInit();
         }
       } else {
-        // Offline local testing
-        userInfoDisplay.textContent = 'Offline mode';
-        userId = 'offline-' + Math.random().toString(36).slice(2,8);
-        player.id = userId;
-        showOnly('bus_cutscene');
+        userIdEl.textContent = 'Offline mode'; offlineInit();
       }
-    });
+    }
 
-    // --- Events ---
-    document.getElementById('skip-bus-cutscene').addEventListener('click', ()=>{
-      showOnly('director_cutscene');
-    });
+    async function onlineInit(){
+      // Cabin scores live
+      onSnapshot(doc(db, cabinsDocPath), (snap)=>{
+        if (snap.exists()){ cabinScores = { ...cabinScores, ...snap.data() }; renderScores(); }
+      });
 
-    document.getElementById('skip-director-cutscene').addEventListener('click', ()=>{
-      showOnly('cabin_select');
-    });
+      // Players live
+      onSnapshot(collection(db, playersCol), (snap)=>{
+        snap.docChanges().forEach(ch=>{
+          const d = ch.doc.data(); if (!d || d.id === userId) return;
+          const other = ensureOther(d.id, new THREE.Color(cabinColors[d.cabin]||'#888').getHex());
+          other.state = d;
+          other.mesh.position.set(d.x||0, 3.5, d.z||0);
+          other.mesh.material.color.set(cabinColors[d.cabin]||'#888');
+        });
+      });
 
-    document.querySelectorAll('.cabin-button').forEach(btn=>{
+      // Chat live
+      onSnapshot(query(collection(db, chatCol), orderBy('ts','desc'), limit(20)), (snap)=>{
+        chatLog.innerHTML='';
+        const rows = [];
+        snap.forEach(doc=>{ const m=doc.data(); rows.push(m); });
+        rows.reverse().forEach(m=> appendChat(m));
+      });
+
+      // If first time, seed doc
+      const meRef = doc(db, playersCol, userId);
+      const meSnap = await getDoc(meRef);
+      if (!meSnap.exists()){ await setDoc(meRef, { ...player }, { merge:true }); }
+
+      show('cutscene');
+    }
+
+    function offlineInit(){
+      renderScores();
+      show('cutscene');
+    }
+
+    // Cabin selection flow
+    document.getElementById('to-cabins').addEventListener('click', ()=> show('cabins'));
+    document.querySelectorAll('#cabins .btn').forEach(btn=>{
       btn.addEventListener('click', async ()=>{
-        player.cabin = btn.getAttribute('data-cabin');
-        if (ONLINE && userId){
-          try{ await setDoc(doc(db, playersCollectionPath, userId), player, { merge:true }); }catch{}
-        }
-        showOnly('playing');
-        resizeCanvas();
-        // Center player
-        const rect = screens.game.getBoundingClientRect();
-        player.x = rect.width/2; player.y = rect.height/2;
-        lastFrameTime = performance.now();
-        gameCanvas.focus();
-        requestAnimationFrame(loop);
+        player.cabin = btn.dataset.cabin;
+        body.material.color.set(cabinColors[player.cabin]);
+        document.getElementById('screens').style.display='none';
+        addCabinScore(player.cabin, 1, 'Arrival');
+        // center
+        player.x = 0; player.z = 0;
+        if (ONLINE){ await setDoc(doc(db, playersCol, userId), { ...player }, { merge:true }).catch(()=>{}); }
       });
     });
 
-    document.addEventListener('keydown', e=>{
-      if (gameState !== 'playing') return;
-      if (e.key==='ArrowUp'   || e.key==='w') movement.up = true;
-      if (e.key==='ArrowDown' || e.key==='s') movement.down = true;
-      if (e.key==='ArrowLeft' || e.key==='a') movement.left = true;
-      if (e.key==='ArrowRight'|| e.key==='d') movement.right = true;
-    });
-    document.addEventListener('keyup', e=>{
-      if (gameState !== 'playing') return;
-      if (e.key==='ArrowUp'   || e.key==='w') movement.up = false;
-      if (e.key==='ArrowDown' || e.key==='s') movement.down = false;
-      if (e.key==='ArrowLeft' || e.key==='a') movement.left = false;
-      if (e.key==='ArrowRight'|| e.key==='d') movement.right = false;
-    });
+    // Main loop
+    let last = performance.now(); let tDay = 0; let questHold = 0;
+    function frame(now){
+      const dt = Math.min(0.05, (now-last)/1000); last=now;
+      tDay = (tDay + dt) % (dayLen);
+      applyDayNight(tDay/dayLen);
 
-    window.addEventListener('resize', ()=>{
-      if (gameState==='playing'){ resizeCanvas(); drawGame(); }
-    });
+      stepMove(dt);
+      followCamera();
+
+      // Needs baseline decay
+      let hungerMul = 0.18, thirstMul = 0.28, bathInc = 0.12;
+      const ev = activeEvent(tDay);
+      if (ev){
+        eventBanner.style.display='block';
+        eventBanner.textContent = `Event: ${ev.name} — ${ev.desc}`;
+        hungerMul *= ev.hungerMul || 1.0;
+        thirstMul *= ev.thirstMul || 1.0;
+      } else eventBanner.style.display='none';
+
+      player.hunger = Math.max(0, player.hunger - hungerMul*100*dt/60);
+      player.thirst = Math.max(0, player.thirst - thirstMul*100*dt/60);
+      player.bathroom = Math.min(100, player.bathroom + bathInc*100*dt/60);
+
+      // Interactions
+      // Lake -> bathroom rises quicker
+      if (AABB(0,0, 0,0, objPos.lake)){ player.bathroom = Math.min(100, player.bathroom + 20*dt); }
+      // Spout -> thirst refill
+      if (AABB(0,0,0,0, objPos.spout)){ player.thirst = Math.min(100, player.thirst + 60*dt); questHold += dt; if (quest.key==='fetch_water' && !quest.done && questHold>=2){ quest.done=true; addCabinScore(player.cabin, 5, 'Quest: Water'); questText.textContent='Quest complete!'; } }
+      else questHold = 0;
+      // Library -> bathroom relief
+      if (AABB(0,0,0,0, objPos.library)){ player.bathroom = Math.max(0, player.bathroom - 120*dt); }
+      // Meal -> refill hunger
+      if (AABB(0,0,0,0, objPos.meal)){ player.hunger = Math.min(100, player.hunger + 100*dt); }
+      // Pit consequence if starving and long time since eat (simulated with hunger<35 & thirst<35)
+      if (player.hunger<35 && player.thirst<35 && AABB(0,0,0,0, objPos.pit)){ player.bullCoins = Math.max(0, player.bullCoins - 10); }
+
+      // Shop proximity
+      const near = AABB(0,0,0,0, objPos.shop);
+      if (near && !nearShop){ shopTip.classList.remove('hidden'); }
+      if (!near && nearShop){ shopTip.classList.add('hidden'); }
+      nearShop = near;
+
+      updateHUD();
+      queueStateSend();
+
+      renderer.render(scene, camera);
+      requestAnimationFrame(frame);
+    }
+
+    // Initial quest
+    questText.textContent = 'Fetch water at the spout (stand next to it for 2s).';
+
+    // Start
+    boot();
+    requestAnimationFrame(frame);
   </script>
 </body>
 </html>
